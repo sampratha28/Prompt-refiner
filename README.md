@@ -19,26 +19,26 @@ Iteratively refining prompts based on failure patterns
 ⛔ Early Stopping with Patience
 🧪 Dataset-based Testing
 🏗️ Architecture
-          ┌────────────────────┐
-          │  Prompt Generator  │
-          └────────┬───────────┘
-                   │
-                   ▼
-          ┌────────────────────┐
-          │     Inference      │
-          └────────┬───────────┘
-                   │
-                   ▼
-          ┌────────────────────┐
-          │   Agent Evaluator  │
-          └────────┬───────────┘
-                   │
-                   ▼
-          ┌────────────────────┐
-          │ Feedback Generator │
-          └────────┬───────────┘
-                   │
-                   ▼
+      ┌────────────────────┐
+      │  Prompt Generator  │
+      └────────┬───────────┘
+               │
+               ▼
+      ┌────────────────────┐
+      │     Inference      │
+      └────────┬───────────┘
+               │
+               ▼
+      ┌────────────────────┐
+      │   Agent Evaluator  │
+      └────────┬───────────┘
+               │
+               ▼
+      ┌────────────────────┐
+      │ Feedback Generator │
+      └────────┬───────────┘
+               │
+               ▼
           🔁 Iteration Loop
 📂 Project Structure
 .
@@ -50,10 +50,7 @@ Iteratively refining prompts based on failure patterns
 ├── iteration_history.json
 ├── optimization_progress.csv
 └── README.md
-⚙️ Installation
-git clone https://github.com/your-username/prompt-optimization-pipeline.git
-cd prompt-optimization-pipeline
-pip install pandas openpyxl
+
 🛠️ Configuration
 
 Update setting.py:
