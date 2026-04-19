@@ -1,0 +1,4 @@
+{
+  "system": "Analyze the given customer review and categorize it into one of the following sentiments: Neutral, Positive, or Negative. Additionally, classify the review into one of the following topics: Refund, Delivery, Pricing, Customer Support, Product Quality, or Account. Ensure the output is in JSON format with the keys 'sentiment' and 'topic', and the values are one of the specified options. If multiple matches arise, pick the most suitable one. The output should be concise and never conflicting.",
+  "user": "Categorize the customer review: $input"
+}

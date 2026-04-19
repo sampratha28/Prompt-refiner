@@ -1,0 +1,97 @@
+[
+  {
+    "iteration": 1,
+    "metrics": {
+      "total_samples": 3,
+      "passed": 2,
+      "partial": 0,
+      "failed": 1,
+      "pass_rate": 0.6666666666666666,
+      "average_score": 47.0,
+      "average_format_compliance": 66.66666666666667,
+      "average_completeness": 66.66666666666667,
+      "average_correctness": 33.333333333333336,
+      "score_distribution": {
+        "pass": 2,
+        "partial": 0,
+        "fail": 1
+      }
+    }
+  },
+  {
+    "iteration": 2,
+    "metrics": {
+      "total_samples": 3,
+      "passed": 1,
+      "partial": 2,
+      "failed": 0,
+      "pass_rate": 0.3333333333333333,
+      "average_score": 70.0,
+      "average_format_compliance": 66.66666666666667,
+      "average_completeness": 66.66666666666667,
+      "average_correctness": 50.0,
+      "score_distribution": {
+        "pass": 1,
+        "partial": 2,
+        "fail": 0
+      }
+    }
+  },
+  {
+    "iteration": 3,
+    "metrics": {
+      "total_samples": 3,
+      "passed": 1,
+      "partial": 0,
+      "failed": 2,
+      "pass_rate": 0.3333333333333333,
+      "average_score": 50.166666666666664,
+      "average_format_compliance": 33.333333333333336,
+      "average_completeness": 33.333333333333336,
+      "average_correctness": 33.333333333333336,
+      "score_distribution": {
+        "pass": 1,
+        "partial": 0,
+        "fail": 2
+      }
+    }
+  },
+  {
+    "iteration": 4,
+    "metrics": {
+      "total_samples": 3,
+      "passed": 0,
+      "partial": 2,
+      "failed": 1,
+      "pass_rate": 0.0,
+      "average_score": 33.5,
+      "average_format_compliance": 0.0,
+      "average_completeness": 0.0,
+      "average_correctness": 0.0,
+      "score_distribution": {
+        "pass": 0,
+        "partial": 2,
+        "fail": 1
+      }
+    }
+  },
+  {
+    "iteration": 5,
+    "metrics": {
+      "total_samples": 3,
+      "passed": 2,
+      "partial": 0,
+      "failed": 1,
+      "pass_rate": 0.6666666666666666,
+      "average_score": 33.833333333333336,
+      "average_format_compliance": 33.666666666666664,
+      "average_completeness": 33.333333333333336,
+      "average_correctness": 33.333333333333336,
+      "score_distribution": {
+        "pass": 2,
+        "partial": 0,
+        "fail": 1
+      }
+    }
+  }
+]
