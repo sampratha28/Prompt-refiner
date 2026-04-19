@@ -7,9 +7,13 @@ Prompt Generation → Inference → Evaluation → Feedback → Refinement
 This project helps you systematically improve prompt quality by:
 
 Generating structured prompts using LLMs
+
 Running them on real datasets
+
 Evaluating outputs with an agentic evaluator
+
 Iteratively refining prompts based on failure patterns
+
 🧠 Key Capabilities
 🔁 Automated Prompt Refinement Loop
 🤖 Agentic Evaluation System (plan → execute → report)
