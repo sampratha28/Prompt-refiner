@@ -81,7 +81,7 @@ Create an optimal prompt from scratch."""
 # INFERENCE
 # =============================================================================
 
-def perform_inference(messages: Dict[str, str], data: pd.DataFrame, input_column: str = "Review Text", model: str = setting.default_model) -> Tuple[List[str], List[Any]]:
+def perform_inference(messages: Dict[str, str], data: pd.DataFrame, input_column: list, model: str = setting.default_model) -> Tuple[List[str], List[Any]]:
     """
     Run inference on dataset using generated prompt.
     
@@ -94,7 +94,11 @@ def perform_inference(messages: Dict[str, str], data: pd.DataFrame, input_column
     Returns:
         Tuple of (raw_results, postprocessed_results)
     """
-    texts = data[input_column].to_list()
+    #texts = data[input_column].to_list()
+    texts = [
+        "\n".join(f"{col}: {row[col]}" for col in input_column)
+        for _, row in data.iterrows()
+    ]
     raw = []
     postprocessed = []
     
@@ -119,9 +123,6 @@ def perform_inference(messages: Dict[str, str], data: pd.DataFrame, input_column
 # =============================================================================
 
 def compute_aggregate_metrics(per_row_evals: List[Dict]) -> Dict[str, Any]:
-    """
-    Compute aggregate metrics from per-row evaluations.
-    """
     total = len(per_row_evals)
     passed = 0
     partial = 0
@@ -132,6 +133,13 @@ def compute_aggregate_metrics(per_row_evals: List[Dict]) -> Dict[str, Any]:
     completeness_scores = []
     correctness_scores = []
     
+    def normalize(val):
+        """Normalize 0-1 floats to 0-100 scale."""
+        if val is None:
+            return 0.0
+        val = float(val)
+        return val * 100 if val <= 1.0 else val
+
     for eval_record in per_row_evals:
         evaluation = eval_record.get("evaluation", {})
         report = evaluation.get("report", {})
@@ -144,16 +152,15 @@ def compute_aggregate_metrics(per_row_evals: List[Dict]) -> Dict[str, Any]:
         else:
             failed += 1
         
-        score = report.get("score", 0)
-        scores.append(score)
+        scores.append(normalize(report.get("score", 0)))
         
         score_breakdown = report.get("score_breakdown", {})
-        format_scores.append(score_breakdown.get("format_compliance", 0))
-        completeness_scores.append(score_breakdown.get("completeness", 0))
-        correctness_scores.append(score_breakdown.get("correctness", 0))
+        format_scores.append(normalize(score_breakdown.get("format_compliance", 0)))
+        completeness_scores.append(normalize(score_breakdown.get("completeness", 0)))
+        correctness_scores.append(normalize(score_breakdown.get("correctness", 0)))
     
     def safe_avg(lst):
-        return sum(lst) / len(lst) if lst else 0.0
+        return round(sum(lst) / len(lst), 2) if lst else 0.0
     
     return {
         "total_samples": total,
@@ -172,11 +179,9 @@ def compute_aggregate_metrics(per_row_evals: List[Dict]) -> Dict[str, Any]:
         }
     }
 
+
 def run_evaluation(raw_results: List[str], ground_truths: List[Any], inputs: List[str], task_requirement: str, guidelines: str, output_struct: str, model: str = setting.default_model) -> Dict[str, Any]:
-    """
-    Evaluate candidate results against ground truth using an agentic workflow.
-    """
-    
+
     system_prompt = """
 You are an autonomous evaluation agent with planning, tool-selection, execution, replanning, and reporting capabilities.
 
@@ -185,8 +190,6 @@ Your purpose is to evaluate a candidate result against:
 - evaluation criteria
 - expected output format
 - GROUND TRUTH (the correct answer)
-
-You must act like an execution-capable agent that can reason about what to verify, decide which tools are necessary, run checks, and produce an evidence-based report.
 
 You are not a passive reviewer. You must follow the full agent loop:
 UNDERSTAND -> PLAN -> SELECT TOOLS -> EXECUTE -> OBSERVE -> REPLAN IF NEEDED -> REPORT
@@ -209,165 +212,114 @@ You are responsible for:
 AVAILABLE TOOLS
 ==================================================
 
-You may use the following abstract tool types. Treat them as callable capabilities.
-
-1. search
-Purpose: verify factual claims, check latest external information
-Use when: candidate or ground truth includes factual claims requiring external grounding
-
-2. fetch
-Purpose: retrieve full content from a URL or document
-Use when: source documents must be inspected directly
-
-3. execute_code
-Purpose: run code for schema validation, parsing, calculations, unit tests, consistency checks, scoring logic
-Use when: JSON/schema/code/math/table/output needs programmatic verification
-
-4. read_file
-Purpose: inspect provided files, logs, reports, datasets
-Use when: evaluation requires file inspection
-
-5. no_tool
-Purpose: complete evaluation without external calls
-Use when: all checks can be done from provided text alone
+1. search - verify factual claims requiring external grounding
+2. fetch - retrieve full content from a URL or document
+3. execute_code - run code for schema validation, parsing, calculations
+4. read_file - inspect provided files, logs, reports
+5. no_tool - complete evaluation without external calls (use when all checks can be done from provided text)
 
 ==================================================
 TOOL DECISION POLICY
 ==================================================
 
-Before using any tool, decide:
-- what exactly needs verification
-- why the tool is necessary
-- what evidence the tool is expected to provide
-- whether the check can be done without the tool
-
-Rules:
 - Do not use tools performatively
 - Prefer deterministic checks over subjective checks
 - Use execute_code for structured validation whenever possible
 - Use search/fetch only when factual verification genuinely requires external evidence
-- If a planned tool call fails or yields insufficient evidence, replan
 - If no tool is needed, explicitly state why
 
 ==================================================
 MANDATORY AGENTIC WORKFLOW
 ==================================================
 
-Follow this exact sequence.
-
 ### Step 1: Understand
-Extract and normalize:
-- task objective
-- expected behavior
-- constraints
-- desired output format
-- evaluation criteria
-- hidden or implied requirements
+Extract: task objective, expected behavior, constraints, desired output format, evaluation criteria, hidden requirements.
 
 ### Step 2: Plan
-Create a concrete plan before any execution.
-
-Your plan must include:
-- checks to perform (format, completeness, correctness vs ground truth, edge cases)
-- test cases to run
-- tools required for each check
-- scoring logic (how to compare candidate vs ground truth)
-- stop conditions
+Define: checks to perform, test cases, tools per check, scoring logic, stop conditions.
 
 ### Step 3: Select Tools
-For each planned check, specify:
-- tool name
-- why it is needed
-- input to the tool
-- expected evidence
-- fallback if the tool fails
+Per check: tool name, why needed, input, expected evidence, fallback.
 
-### Step 4: Execute
-Run the checks in this order:
+### Step 4: Execute checks in this order:
 1. output format correctness
 2. required fields and completeness
 3. instruction compliance
 4. internal consistency
 5. CORRECTNESS VS GROUND TRUTH (most important)
-6. factual correctness (if no ground truth available)
+6. factual correctness (if no ground truth)
 7. quality and edge-case handling
 
 ### Step 5: Observe
-For each executed step, record:
-- what was checked
-- result: pass/fail/partial/not_executed
-- evidence (quote candidate and ground truth where relevant)
-- confidence level: high/medium/low
-- whether replanning is needed
+Per step: what was checked, result (pass/fail/partial/not_executed), evidence, confidence, replan needed.
 
 ### Step 6: Replan if Needed
-Trigger replanning when:
-- a tool fails
-- evidence is incomplete
-- a new issue is discovered
-- a prior assumption is invalidated
+Trigger when: tool fails, evidence incomplete, new issue discovered, prior assumption invalidated.
 
 ### Step 7: Report
-Generate a structured final report with evidence.
-
-Do not jump directly to the verdict.
+Generate structured final report with evidence. Do not jump to verdict.
 
 ==================================================
 SPECIALIZED EVALUATION RULES
 ==================================================
 
-If the task involves JSON or structured output:
+For JSON/structured output:
 - verify valid parseability
 - verify required keys match ground truth schema
 - verify value types
-- compare candidate values against ground truth values
-- compute field-level accuracy
+- compare candidate values against ground truth values field by field
 
-If the task involves classification:
-- compare predicted label vs ground truth label
-- verify explanation quality
-- check consistency between label and rationale
+For classification tasks:
+- compare predicted label vs ground truth label (exact string match, case-sensitive)
+- verify explanation quality and consistency with chosen label
 - mark correct/incorrect with evidence
 
-If the task involves extraction:
-- verify all required fields are extracted
+For extraction tasks:
+- verify all required fields extracted
 - compare extracted values against ground truth
 - check for hallucinated fields
-- compute extraction accuracy
-
-If the task involves summarization/generation:
-- check completeness vs ground truth
-- check for hallucinations (claims not in ground truth or input)
-- check instruction following
-- ignore stylistic differences unless style is part of criteria
 
 ==================================================
-SCORING LOGIC
+SCORING LOGIC — CRITICAL: USE INTEGER 0-100 SCALE ONLY
 ==================================================
 
-Use this scoring approach:
-- format_compliance: 0-100 (based on schema/format adherence)
-- completeness: 0-100 (based on required fields present)
-- correctness: 0-100 (based on match with ground truth)
-- overall_score: weighted average (format: 20%, completeness: 20%, correctness: 60%)
+ALL scores MUST be integers between 0 and 100.
+DO NOT use decimals like 0.85 or 0.5 — this is WRONG.
+USE integers like 85 or 50 — this is CORRECT.
 
-overall_result:
-- "pass" if overall_score >= 80
-- "partial" if 50 <= overall_score < 80
-- "fail" if overall_score < 50
+Scoring dimensions:
+- format_compliance (0-100): adherence to required JSON schema and output structure
+- completeness (0-100): all required fields present with non-empty values
+- correctness (0-100): match between candidate output and ground truth values
+
+Score computation (must be integer 0-100):
+  score = (format_compliance * 0.2) + (completeness * 0.2) + (correctness * 0.6)
+
+overall_result thresholds:
+- "pass"    if score >= 80
+- "partial" if 50 <= score < 80
+- "fail"    if score < 50
+
+CORRECT example:
+  "score_breakdown": {"format_compliance": 85, "completeness": 90, "correctness": 40}
+  "score": 61
+
+WRONG example (never do this):
+  "score_breakdown": {"format_compliance": 0.85, "completeness": 0.90, "correctness": 0.40}
+  "score": 0.61
 
 ==================================================
 OUTPUT FORMAT
 ==================================================
 
-Return valid JSON only. No markdown, no conversational filler.
+Return valid JSON only. No markdown. No conversational filler. No code fences.
 
 {
   "understanding": {
     "objective": "...",
-    "constraints": ["...", "..."],
+    "constraints": ["..."],
     "expected_output": "...",
-    "success_criteria": ["...", "..."]
+    "success_criteria": ["..."]
   },
   "plan": {
     "checks": [
@@ -390,12 +342,8 @@ Return valid JSON only. No markdown, no conversational filler.
     ],
     "scoring_method": {
       "type": "weighted",
-      "weights": {
-        "format_compliance": 0.2,
-        "completeness": 0.2,
-        "correctness": 0.6
-      },
-      "details": "..."
+      "weights": {"format_compliance": 0.2, "completeness": 0.2, "correctness": 0.6},
+      "details": "All scores are integers 0-100. Final score = weighted sum."
     },
     "termination_condition": "..."
   },
@@ -417,7 +365,7 @@ Return valid JSON only. No markdown, no conversational filler.
     "replanning": []
   },
   "report": {
-    "overall_result": "pass|fail|partial",
+    "overall_result": "pass|partial|fail",
     "score": 0,
     "score_breakdown": {
       "format_compliance": 0,
@@ -425,9 +373,9 @@ Return valid JSON only. No markdown, no conversational filler.
       "correctness": 0
     },
     "summary": "...",
-    "strengths": ["...", "..."],
-    "issues": ["...", "..."],
-    "recommendations": ["...", "..."],
+    "strengths": ["..."],
+    "issues": ["..."],
+    "recommendations": ["..."],
     "unverified_items": []
   }
 }
@@ -440,11 +388,10 @@ BEHAVIORAL RULES
 - Always compare candidate against ground truth when available
 - Do not claim execution if no execution occurred
 - Do not invent tool results
-- If a claim cannot be verified, mark it unverified
-- If information is insufficient, say so explicitly
-- Do not output conversational filler
-- Do not output markdown
+- Mark unverifiable claims as unverified
+- Do not output markdown, code fences, or conversational filler
 - Output must be valid JSON only
+- All numeric scores must be integers 0-100, never decimals 0-1
 """
 
     per_row_evals = []
@@ -472,10 +419,13 @@ Candidate Result (Model Output):
 {candidate}
 
 Evaluate the candidate result against the ground truth using the full agentic workflow.
-Compare candidate values directly against ground truth values.
+Compare candidate values directly against ground truth values field by field.
 Identify mismatches, missing fields, hallucinations, and format violations.
-Compute field-level and overall accuracy.
-Return valid JSON only.
+
+IMPORTANT: All scores in score_breakdown and score must be integers between 0 and 100.
+Do NOT use decimals like 0.85 — use integers like 85.
+
+Return valid JSON only. No markdown. No code fences.
 """
         
         eval_response = helper.call_llm(model, system_prompt, user_prompt)
@@ -496,13 +446,13 @@ Return valid JSON only.
         }
         
         per_row_evals.append(eval_record)
+
     aggregate_metrics = compute_aggregate_metrics(per_row_evals)
     return {
         "per_row_evals": per_row_evals,
         "aggregate_metrics": aggregate_metrics,
         "total_samples": len(raw_results)
     }
-
 def generate_refinement_feedback(eval_result: Dict[str, Any]) -> str:
     """
     Analyze evaluation results and generate actionable feedback for prompt refinement.
@@ -613,7 +563,7 @@ def check_benchmark(metrics: Dict[str, Any]) -> Tuple[bool, str]:
 # MAIN OPTIMIZATION LOOP
 # =============================================================================
 
-def optimize_prompt(df: pd.DataFrame, task_requirement: str, guidelines: List[str], output_struct: str, input_column: str , res_columns: List[str]) -> Dict[str, Any]:
+def optimize_prompt(df: pd.DataFrame, task_requirement: str, guidelines: List[str], output_struct: str, input_column: List[str] , res_columns: List[str]) -> Dict[str, Any]:
     """
     Main optimization loop: generate prompt -> infer -> evaluate -> refine until benchmark met.
     
@@ -641,7 +591,11 @@ def optimize_prompt(df: pd.DataFrame, task_requirement: str, guidelines: List[st
     patience = 1
     ground_truths = helper.prepare_ground_truths(df, res_columns)
     
-    inputs = df[input_column].to_list()
+    #inputs = df[input_column].to_list()
+    inputs = [
+        "\n".join(f"{col}: {row[col]}" for col in input_column)
+        for _, row in df.iterrows()
+    ]
     
     iteration_history = []
     best_prompt = None
@@ -754,9 +708,10 @@ def optimize_prompt(df: pd.DataFrame, task_requirement: str, guidelines: List[st
 
 if __name__ == '__main__':
     print("Loading dataset...")
-    df = pd.read_excel('customer_support_eval_dataset.xlsx')
+    df = pd.read_excel('/Users/sampratha/Desktop/projects/self_prompt_refiner/compliance_coverage_dataset.xlsx')
+
     print(f"Dataset loaded: {len(df)} samples") 
-    final_result = optimize_prompt(df, setting.task_requirement, setting.guidelines, setting.output_strut, "Review Text", ["Ground Truth Sentiment", "Ground Truth Topic"])
+    final_result = optimize_prompt(df, setting.task_requirement, setting.guidelines, setting.output_strut, setting.input_columns, setting.ground_truth_columns)
     
     # Save results
     print("\nSaving results...")
